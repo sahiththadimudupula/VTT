@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,6 +6,8 @@ APP_TITLE = "Welspun Vapi Terry Tovals Engine"
 APP_ICON = "🏭"
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_WORKBOOK_PATH = PACKAGE_ROOT / "input" / "WTT.xlsx"
+OUTPUT_DIRECTORY_PATH = PACKAGE_ROOT / "output"
+WORKING_WORKBOOK_PATH = OUTPUT_DIRECTORY_PATH / "WTT_working.xlsx"
 
 SIZE_WISE_DETAILS_SHEET = "Size_wise_details"
 SIZE_WISE_SUMMARY_SHEET = "Size_wise_details_summary"
@@ -52,7 +53,37 @@ SIZE_CATEGORY_TO_SAM = {
 }
 
 SUMMARY_EDITABLE_COLUMNS = ["Sum of Order Pcs", "Sum of Order Kgs"]
-WTT_EDITABLE_COLUMNS = ["BE_Final_Manpower", "General_Shift", "Shift_A", "Shift_B", "Shift_C"]
+WTT_EDITABLE_COLUMNS = [
+    "BE_Final_Manpower",
+    "General_Shift",
+    "Shift_A",
+    "Shift_B",
+    "Shift_C",
+    "Reliever",
+    "Remarks",
+]
+WTT_COMPACT_DISPLAY_COLUMNS = [
+    "Section",
+    "Dept_Machine_Name",
+    "Designation",
+    "BE_Final_Manpower",
+]
+WTT_EXPANDED_DISPLAY_COLUMNS = [
+    "Section",
+    "Dept_Machine_Name",
+    "Designation",
+    "BE_Final_Manpower",
+    "General_Shift",
+    "Shift_A",
+    "Shift_B",
+    "Shift_C",
+    "Reliever",
+    "Remarks",
+]
+FORMULA_TAG_COLUMN = "Formula Tag"
+
+WTT_INTERNAL_ROW_ID_COLUMN = "__row_id"
+INTERNAL_DISPLAY_COLUMNS = [WTT_INTERNAL_ROW_ID_COLUMN]
 
 PREDICTION_DIVISOR = 0.97
 DEFAULT_DAYS = 30.0
@@ -120,8 +151,6 @@ STENTER_DEFAULT_INPUTS = {
     "available_machines": 5.0,
 }
 STENTER_SHIFT_NAMES = ["1st Shift", "2nd Shift", "3rd Shift"]
-
-
 STENTER_INPUT_LABELS = {
     "Required Production / Day (MT)": "required_production_mt_per_day",
     "Capacity / Machine / Shift (MT)": "capacity_per_machine_per_shift_mt",

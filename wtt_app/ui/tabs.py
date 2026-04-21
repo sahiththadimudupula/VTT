@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import pandas as pd
@@ -28,15 +27,24 @@ from wtt_app.config import (
     WTT_SHEET,
 )
 from wtt_app.calculations.links import refresh_calculated_workbook
-from wtt_app.core.formatters import build_numeric_column_config
+from wtt_app.core.formatters import build_numeric_column_config, format_dataframe_for_display
+from wtt_app.core.tables import (
+    add_total_row,
+    apply_designation_filter,
+    available_designations,
+    remove_total_row,
+)
 from wtt_app.core.workbook import (
+    build_export_bytes,
     get_workbook_state,
     replace_size_wise_details_sheet,
     set_workbook_state,
     update_wtt_section,
 )
 from wtt_app.ui.components import (
-    render_editable_wtt_table,
+    render_compact_section_table,
+    render_expandable_editable_section,
+    render_filter_block,
     render_metric_grid,
     render_read_only_table,
     render_section_header,
@@ -50,6 +58,43 @@ def build_summary_override_editor(summary_dataframe: pd.DataFrame) -> pd.DataFra
         summary_dataframe["Row Labels"].isin(SIZE_CATEGORY_ORDER)
     ][["Row Labels", "Sum of Order Pcs", "Sum of Order Kgs"]].copy()
     return editable_dataframe.reset_index(drop=True)
+
+
+def _render_designation_filter(filter_key: str, dataframe: pd.DataFrame) -> list[str]:
+    designation_values = available_designations(dataframe)
+    render_filter_block("Designation filter")
+    return st.multiselect(
+        "Designation",
+        options=designation_values,
+        default=[],
+        key=filter_key,
+        label_visibility="collapsed",
+        placeholder="All designations",
+    )
+
+
+def _render_section_collection(
+    section_order: list[str],
+    tab_key_prefix: str,
+    tab_dataframe: pd.DataFrame,
+) -> None:
+    for section_name in section_order:
+        section_dataframe = tab_dataframe[tab_dataframe["Section"] == section_name].copy()
+        if section_dataframe.empty:
+            continue
+        render_compact_section_table(section_name, section_dataframe)
+        edited_dataframe = render_expandable_editable_section(
+            section_name,
+            section_dataframe,
+            f"{tab_key_prefix}_{section_name}",
+        )
+        action_column, _ = st.columns([1, 6])
+        with action_column:
+            if st.button(f"Save {section_name}", key=f"save_{tab_key_prefix}_{section_name}"):
+                update_wtt_section(section_name, edited_dataframe)
+                st.success(f"{section_name} saved.")
+                st.rerun()
+        render_validation_warning(remove_total_row(edited_dataframe), section_name)
 
 
 def render_size_wise_tab() -> None:
@@ -84,7 +129,7 @@ def render_size_wise_tab() -> None:
 
     render_section_header(
         "Editable Size_wise_details_summary inputs",
-        "You can directly edit Sum of Order Pcs and Sum of Order Kgs. Percentage, Grms/Pc, and Pcs/Kg will recalculate automatically.",
+        "You can directly edit Sum of Order Pcs and Sum of Order Kgs. Percentage, Grms/Pc, and Pcs/Kg recalculate automatically.",
     )
     edited_override_dataframe = st.data_editor(
         build_summary_override_editor(summary_dataframe),
@@ -100,21 +145,22 @@ def render_size_wise_tab() -> None:
     with action_column_1:
         if st.button("Apply summary changes"):
             workbook_state["summary_manual_override"] = edited_override_dataframe.copy()
-            set_workbook_state(refresh_calculated_workbook(workbook_state))
+            set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
             st.success("Summary values updated. Linked Cut&Sew calculations have been refreshed.")
             st.rerun()
     with action_column_2:
         if st.button("Reset summary to production data"):
             workbook_state["summary_manual_override"] = None
-            set_workbook_state(refresh_calculated_workbook(workbook_state))
+            set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
             st.success("Summary reset to the live Size_wise_details production data.")
             st.rerun()
 
     render_read_only_table(
         "Size_wise_details_summary",
         summary_dataframe,
-        height=420,
+        height=430,
         note="Summary view with recalculated percentage, Grms/Pc, SAM, and Pcs/Kg.",
+        label_column="Row Labels",
     )
 
     render_section_header(
@@ -148,33 +194,31 @@ def render_weaving_tab() -> None:
     wtt_dataframe = workbook_state["sheets"][WTT_SHEET]
     weaving_backup_dataframe = workbook_state["sheets"][WEAVING_BACKUP_SHEET]
     weaving_dataframe = wtt_dataframe[wtt_dataframe["Section"].isin(SECTION_ORDER_WEAVING)].copy()
+    selected_designations = _render_designation_filter("weaving_designation_filter", weaving_dataframe)
+    filtered_weaving_dataframe = apply_designation_filter(weaving_dataframe, selected_designations)
 
-    render_section_summary("Weaving summary", weaving_dataframe)
-    for section_name in SECTION_ORDER_WEAVING:
-        section_dataframe = weaving_dataframe[weaving_dataframe["Section"] == section_name].copy()
-        if section_dataframe.empty:
-            continue
-
-        edited_dataframe = render_editable_wtt_table(
-            section_name,
-            section_dataframe,
-            f"weaving_{section_name}",
-            note="Editable manpower columns: BE_Final_Manpower, General_Shift, Shift_A, Shift_B, and Shift_C.",
-        )
-        action_column, _ = st.columns([1, 6])
-        with action_column:
-            if st.button(f"Save {section_name}", key=f"save_{section_name}"):
-                update_wtt_section(section_name, edited_dataframe)
-                st.success(f"{section_name} saved.")
-                st.rerun()
-
-        render_validation_warning(edited_dataframe, section_name)
-
+    render_metric_grid(
+        [
+            {
+                "label": "Visible Sections",
+                "value": filtered_weaving_dataframe["Section"].nunique(),
+                "note": "Sections after designation filter",
+            },
+            {
+                "label": "Sum of BE_Final_Manpower",
+                "value": pd.to_numeric(filtered_weaving_dataframe["BE_Final_Manpower"], errors="coerce").sum(),
+                "note": "Live total for visible rows",
+            },
+        ]
+    )
+    render_section_summary("Weaving summary", filtered_weaving_dataframe)
+    _render_section_collection(SECTION_ORDER_WEAVING, "weaving", filtered_weaving_dataframe)
     render_read_only_table(
         "Weaving Back-Up",
         weaving_backup_dataframe,
         height=360,
         note="Display-only support table. Machine counts are not edited on this screen.",
+        label_column="Details" if "Details" in weaving_backup_dataframe.columns else None,
     )
 
 
@@ -182,28 +226,25 @@ def render_processing_tab() -> None:
     workbook_state = get_workbook_state()
     wtt_dataframe = workbook_state["sheets"][WTT_SHEET]
     processing_dataframe = wtt_dataframe[wtt_dataframe["Section"].isin(SECTION_ORDER_PROCESSING)].copy()
+    selected_designations = _render_designation_filter("processing_designation_filter", processing_dataframe)
+    filtered_processing_dataframe = apply_designation_filter(processing_dataframe, selected_designations)
 
-    render_section_summary("Processing summary", processing_dataframe)
-
-    for section_name in SECTION_ORDER_PROCESSING:
-        section_dataframe = processing_dataframe[processing_dataframe["Section"] == section_name].copy()
-        if section_dataframe.empty:
-            continue
-
-        edited_dataframe = render_editable_wtt_table(
-            section_name,
-            section_dataframe,
-            f"processing_{section_name}",
-            note="Editable manpower columns remain aligned with the main WTT structure.",
-        )
-        action_column, _ = st.columns([1, 6])
-        with action_column:
-            if st.button(f"Save {section_name}", key=f"save_processing_{section_name}"):
-                update_wtt_section(section_name, edited_dataframe)
-                st.success(f"{section_name} saved.")
-                st.rerun()
-
-        render_validation_warning(edited_dataframe, section_name)
+    render_metric_grid(
+        [
+            {
+                "label": "Visible Sections",
+                "value": filtered_processing_dataframe["Section"].nunique(),
+                "note": "Sections after designation filter",
+            },
+            {
+                "label": "Sum of BE_Final_Manpower",
+                "value": pd.to_numeric(filtered_processing_dataframe["BE_Final_Manpower"], errors="coerce").sum(),
+                "note": "Live total for visible rows",
+            },
+        ]
+    )
+    render_section_summary("Processing summary", filtered_processing_dataframe)
+    _render_section_collection(SECTION_ORDER_PROCESSING, "processing", filtered_processing_dataframe)
 
     render_section_header(
         "Stenter dynamic planning",
@@ -242,12 +283,22 @@ def render_processing_tab() -> None:
             "capacity_per_machine_per_shift_mt": capacity_per_machine,
             "available_machines": available_machines,
         }
-        set_workbook_state(refresh_calculated_workbook(workbook_state))
+        set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
         st.success("Stenter planning refreshed.")
         st.rerun()
 
-    render_read_only_table("Stenter shift plan", workbook_state["sheets"][STENTER_PLAN_SHEET], height=260)
-    render_read_only_table("Stenter manpower", workbook_state["sheets"][STENTER_MANPOWER_SHEET], height=220)
+    render_read_only_table(
+        "Stenter shift plan",
+        workbook_state["sheets"][STENTER_PLAN_SHEET],
+        height=260,
+        label_column="Shift",
+    )
+    render_read_only_table(
+        "Stenter manpower",
+        workbook_state["sheets"][STENTER_MANPOWER_SHEET],
+        height=220,
+        label_column="Designation",
+    )
 
 
 def render_cut_sew_tab() -> None:
@@ -256,6 +307,8 @@ def render_cut_sew_tab() -> None:
     cut_sew_dataframe = sheets[WTT_SHEET][
         sheets[WTT_SHEET]["Section"].isin(SECTION_ORDER_CUT_SEW)
     ].copy()
+    selected_designations = _render_designation_filter("cut_sew_designation_filter", cut_sew_dataframe)
+    filtered_cut_sew_dataframe = apply_designation_filter(cut_sew_dataframe, selected_designations)
 
     juki_including_cch = float(
         sheets[JUKI_SHEET].loc[
@@ -287,60 +340,48 @@ def render_cut_sew_tab() -> None:
             },
         ]
     )
+    render_section_summary("Cut&Sew summary", filtered_cut_sew_dataframe)
+    _render_section_collection(SECTION_ORDER_CUT_SEW, "cut_sew", filtered_cut_sew_dataframe)
 
-    render_section_summary("Cut&Sew summary", cut_sew_dataframe)
-    for section_name in SECTION_ORDER_CUT_SEW:
-        section_dataframe = cut_sew_dataframe[cut_sew_dataframe["Section"] == section_name].copy()
-        if section_dataframe.empty:
-            continue
-
-        edited_dataframe = render_editable_wtt_table(
-            section_name,
-            section_dataframe,
-            f"cut_sew_{section_name}",
-            note="Helper-driven rows are prefilled, and you can still adjust final manpower allocations manually.",
-        )
-        action_column, _ = st.columns([1, 6])
-        with action_column:
-            if st.button(f"Save {section_name}", key=f"save_cut_sew_{section_name}"):
-                update_wtt_section(section_name, edited_dataframe)
-                st.success(f"{section_name} saved.")
-                st.rerun()
-
-        render_validation_warning(edited_dataframe, section_name)
-
-    render_read_only_table(TT_CUT_SEW_LC_SHEET, sheets[TT_CUT_SEW_LC_SHEET], height=360)
-    render_read_only_table(TT_CUT_SEW_LH_SHEET, sheets[TT_CUT_SEW_LH_SHEET], height=400)
+    render_read_only_table(TT_CUT_SEW_LC_SHEET, sheets[TT_CUT_SEW_LC_SHEET], height=360, label_column="Parameters")
+    render_read_only_table(TT_CUT_SEW_LH_SHEET, sheets[TT_CUT_SEW_LH_SHEET], height=400, label_column="Parameters")
     render_read_only_table(DTA_SHEET, sheets[DTA_SHEET], height=240)
-    render_read_only_table(JUKI_SHEET, sheets[JUKI_SHEET], height=380)
+    render_read_only_table(JUKI_SHEET, sheets[JUKI_SHEET], height=380, label_column="Parameters" if "Parameters" in sheets[JUKI_SHEET].columns else None)
 
 
 def render_vtt_tab() -> None:
-    wtt_dataframe = get_workbook_state()["sheets"][WTT_SHEET]
+    workbook_state = get_workbook_state()
+    wtt_dataframe = workbook_state["sheets"][WTT_SHEET].copy()
+    selected_designations = _render_designation_filter("vtt_designation_filter", wtt_dataframe)
+    filtered_wtt_dataframe = apply_designation_filter(wtt_dataframe, selected_designations)
 
     render_metric_grid(
         [
-            {"label": "Location", "value": "Vapi", "note": "Final consolidated WTT"},
             {
                 "label": "Sections",
-                "value": wtt_dataframe["Section"].nunique(),
+                "value": filtered_wtt_dataframe["Section"].nunique(),
                 "note": "Across the Vapi operating model",
             },
             {
                 "label": "Final Manpower",
-                "value": wtt_dataframe["BE_Final_Manpower"].sum(),
+                "value": pd.to_numeric(filtered_wtt_dataframe["BE_Final_Manpower"], errors="coerce").sum(),
                 "note": "Live total from current state",
-            },
-            {
-                "label": "Scientific Manpower",
-                "value": wtt_dataframe["BE_Scientific_Manpower"].sum(),
-                "note": "Reference baseline",
             },
         ]
     )
+
     render_read_only_table(
         "Final VTT table",
-        wtt_dataframe,
+        filtered_wtt_dataframe,
         height=720,
         note="The full WTT sheet after all live calculations and manual edits.",
+        label_column="Section",
+    )
+
+    download_map = {"VTT": filtered_wtt_dataframe}
+    st.download_button(
+        label="Download VTT table",
+        data=build_export_bytes(download_map),
+        file_name="VTT_final_table.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )

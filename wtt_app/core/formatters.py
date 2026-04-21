@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from typing import Any
@@ -6,7 +5,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from wtt_app.config import DECIMAL_STEP, STREAMLIT_NUMBER_FORMAT
+from wtt_app.config import DECIMAL_STEP, INTERNAL_DISPLAY_COLUMNS, STREAMLIT_NUMBER_FORMAT
 
 
 def format_number(value: Any) -> str:
@@ -19,6 +18,11 @@ def format_number(value: Any) -> str:
 
 def format_dataframe_for_display(dataframe: pd.DataFrame) -> pd.DataFrame:
     formatted_dataframe = dataframe.copy()
+    hidden_columns = [
+        column_name for column_name in INTERNAL_DISPLAY_COLUMNS if column_name in formatted_dataframe.columns
+    ]
+    if hidden_columns:
+        formatted_dataframe = formatted_dataframe.drop(columns=hidden_columns)
     numeric_columns = formatted_dataframe.select_dtypes(include=["number"]).columns
     for column_name in numeric_columns:
         formatted_dataframe[column_name] = formatted_dataframe[column_name].map(format_number)

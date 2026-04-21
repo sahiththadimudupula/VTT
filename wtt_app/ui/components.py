@@ -9,6 +9,7 @@ import streamlit as st
 
 from wtt_app.config import (
     DTA_SHEET,
+    FORMULA_TAG_COLUMN,
     JUKI_SHEET,
     SIZE_WISE_DETAILS_SHEET,
     SIZE_WISE_SUMMARY_SHEET,
@@ -18,15 +19,23 @@ from wtt_app.config import (
     TT_CUT_SEW_LC_SHEET,
     TT_CUT_SEW_LH_SHEET,
     WEAVING_BACKUP_SHEET,
-    WTT_SHEET,
+    WTT_INTERNAL_ROW_ID_COLUMN,
+    WTT_COMPACT_DISPLAY_COLUMNS,
     WTT_EDITABLE_COLUMNS,
+    WTT_EXPANDED_DISPLAY_COLUMNS,
+    WTT_SHEET,
 )
 from wtt_app.core.formatters import (
     build_numeric_column_config,
     format_dataframe_for_display,
     format_number,
 )
-from wtt_app.core.workbook import build_export_bytes, get_workbook_state, reset_workbook_state
+from wtt_app.core.tables import (
+    add_total_row,
+    build_compact_section_table,
+    build_expanded_editable_table,
+)
+from wtt_app.core.workbook import build_export_bytes, get_workbook_state, reload_workbook_state, reset_workbook_state
 
 
 def render_hero() -> None:
@@ -34,7 +43,7 @@ def render_hero() -> None:
         dedent(
             """
             <div class="hero-shell">
-                <div class="hero-title">Welspun Vapi Terry Towel Engine</div>
+                <div class="hero-title">Welspun Vapi Terry Tovals Engine</div>
             </div>
             """
         ),
@@ -51,6 +60,8 @@ def render_section_header(title: str, note: str | None = None) -> None:
 
 
 def render_metric_grid(metrics: list[dict[str, Any]]) -> None:
+    if not metrics:
+        return
     metric_columns = st.columns(len(metrics))
     for column, metric in zip(metric_columns, metrics):
         with column:
@@ -68,47 +79,69 @@ def render_metric_grid(metrics: list[dict[str, Any]]) -> None:
             )
 
 
+def render_filter_block(title: str) -> None:
+    st.markdown(
+        f'<div class="filter-shell"><div class="section-title" style="margin-bottom:0;">{escape(title)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_read_only_table(
     title: str,
     dataframe: pd.DataFrame,
     height: int = 360,
     note: str | None = None,
+    label_column: str | None = None,
 ) -> None:
     render_section_header(title, note)
+    dataframe_with_total = add_total_row(dataframe, label_column=label_column)
     st.dataframe(
-        format_dataframe_for_display(dataframe),
+        format_dataframe_for_display(dataframe_with_total),
         use_container_width=True,
         hide_index=True,
         height=height,
     )
 
 
-def render_editable_wtt_table(
-    title: str,
-    dataframe: pd.DataFrame,
+def render_compact_section_table(section_name: str, section_dataframe: pd.DataFrame) -> None:
+    compact_dataframe = build_compact_section_table(section_dataframe, WTT_COMPACT_DISPLAY_COLUMNS)
+    render_read_only_table(
+        title=section_name,
+        dataframe=compact_dataframe,
+        height=min(300, 90 + len(compact_dataframe) * 36),
+        note="Visible section view",
+        label_column="Section",
+    )
+
+
+def render_expandable_editable_section(
+    section_name: str,
+    section_dataframe: pd.DataFrame,
     key_prefix: str,
-    note: str | None = None,
 ) -> pd.DataFrame:
-    render_section_header(title, note)
+    expanded_dataframe = build_expanded_editable_table(section_dataframe, WTT_EXPANDED_DISPLAY_COLUMNS)
     disabled_columns = [
         column_name
-        for column_name in dataframe.columns
-        if column_name not in WTT_EDITABLE_COLUMNS
+        for column_name in expanded_dataframe.columns
+        if column_name not in WTT_EDITABLE_COLUMNS and column_name != WTT_INTERNAL_ROW_ID_COLUMN
     ]
-    editable_columns = [
-        column_name
-        for column_name in WTT_EDITABLE_COLUMNS
-        if column_name in dataframe.columns
+    editable_numeric_columns = [
+        column_name for column_name in WTT_EDITABLE_COLUMNS if column_name in expanded_dataframe.columns and column_name != "Remarks"
     ]
-    return st.data_editor(
-        dataframe.reset_index(drop=True),
-        use_container_width=True,
-        hide_index=True,
-        num_rows="fixed",
-        key=f"{key_prefix}_editor",
-        disabled=disabled_columns,
-        column_config=build_numeric_column_config(editable_columns),
-    )
+    column_config = build_numeric_column_config(editable_numeric_columns)
+    column_config[WTT_INTERNAL_ROW_ID_COLUMN] = None
+
+    with st.expander(f"Expand Section - {section_name}"):
+        edited_dataframe = st.data_editor(
+            expanded_dataframe.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+            num_rows="fixed",
+            key=f"{key_prefix}_editor",
+            disabled=disabled_columns,
+            column_config=column_config,
+        )
+        return edited_dataframe
 
 
 def render_section_summary(title: str, dataframe: pd.DataFrame) -> None:
@@ -120,7 +153,8 @@ def render_section_summary(title: str, dataframe: pd.DataFrame) -> None:
     render_read_only_table(
         title=title,
         dataframe=summary_dataframe,
-        height=min(340, 70 + len(summary_dataframe) * 36),
+        height=min(340, 80 + len(summary_dataframe) * 36),
+        label_column="Section",
     )
 
 
@@ -136,11 +170,12 @@ def render_validation_warning(dataframe: pd.DataFrame, section_name: str) -> Non
         return
 
     validation_dataframe = dataframe.copy()
+    validation_dataframe = validation_dataframe[validation_dataframe["Designation"].astype(str) != "Total"].copy() if "Designation" in validation_dataframe.columns else validation_dataframe
     validation_dataframe["Shift_Total"] = validation_dataframe[
         ["General_Shift", "Shift_A", "Shift_B", "Shift_C"]
     ].sum(axis=1)
     validation_dataframe["Difference"] = (
-        validation_dataframe["BE_Final_Manpower"] - validation_dataframe["Shift_Total"]
+        pd.to_numeric(validation_dataframe["BE_Final_Manpower"], errors="coerce") - validation_dataframe["Shift_Total"]
     )
     mismatch_dataframe = validation_dataframe[
         validation_dataframe["Difference"].round(2) != 0.0
@@ -154,25 +189,38 @@ def render_validation_warning(dataframe: pd.DataFrame, section_name: str) -> Non
         f"{section_name}: some rows have a gap between BE_Final_Manpower and shift allocation."
     )
     st.dataframe(
-        format_dataframe_for_display(mismatch_dataframe),
+        format_dataframe_for_display(add_total_row(mismatch_dataframe, label_column="Designation")),
         use_container_width=True,
         hide_index=True,
-        height=min(260, 70 + len(mismatch_dataframe) * 36),
+        height=min(260, 80 + len(mismatch_dataframe) * 36),
     )
 
 
-def render_sidebar() -> None:
+def render_bottom_action_panel() -> None:
     workbook_state = get_workbook_state()
     sheets = workbook_state["sheets"]
     wtt_dataframe = sheets[WTT_SHEET]
 
-    st.sidebar.markdown('<div class="sidebar-heading">Workbook source</div>', unsafe_allow_html=True)
-    st.sidebar.code(str(SOURCE_WORKBOOK_PATH), language=None)
-    st.sidebar.caption("Loaded directly from the local input folder. No upload step is required.")
+    render_section_header(
+        'Workbook controls',
+        'Reload the current workbook, reset to the original input file, or download the latest updated workbook.',
+    )
+    source_path = str(workbook_state.get('source_path', SOURCE_WORKBOOK_PATH))
+    st.markdown(
+        f'<div class="bottom-action-shell"><div class="bottom-action-status">Current Source: <span>{escape(source_path)}</span></div></div>',
+        unsafe_allow_html=True,
+    )
 
-    if st.sidebar.button("Reload source workbook"):
-        reset_workbook_state()
-        st.rerun()
+    action_column_1, action_column_2, action_column_3 = st.columns([1, 1, 1.35])
+    with action_column_1:
+        if st.button("Reload workbook", key="reload_workbook_bottom"):
+            reload_workbook_state()
+            st.rerun()
+    with action_column_2:
+        if st.button("Reset to original", key="reset_workbook_bottom"):
+            reset_workbook_state()
+            st.success("Workbook reset to the original input file.")
+            st.rerun()
 
     export_sheet_map = {
         SIZE_WISE_DETAILS_SHEET: sheets[SIZE_WISE_DETAILS_SHEET],
@@ -186,13 +234,28 @@ def render_sidebar() -> None:
         JUKI_SHEET: sheets[JUKI_SHEET],
         WTT_SHEET: sheets[WTT_SHEET],
     }
-    st.sidebar.download_button(
-        label="Download updated workbook",
-        data=build_export_bytes(export_sheet_map),
-        file_name="WTT_updated_executive.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    )
+    with action_column_3:
+        st.download_button(
+            label="Download updated workbook",
+            data=build_export_bytes(export_sheet_map),
+            file_name="WTT_updated_executive.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="download_workbook_bottom",
+        )
 
-    st.sidebar.markdown('<div class="sidebar-heading divider-space">Quick totals</div>', unsafe_allow_html=True)
-    st.sidebar.write(f"**BE Final Manpower:** {format_number(wtt_dataframe['BE_Final_Manpower'].sum())}")
-    st.sidebar.write(f"**BE Scientific Manpower:** {format_number(wtt_dataframe['BE_Scientific_Manpower'].sum())}")
+    metric_columns = st.columns(2)
+    with metric_columns[0]:
+        st.markdown(
+            f'<div class="bottom-action-metric">Final Manpower: <span>{escape(format_number(pd.to_numeric(wtt_dataframe["BE_Final_Manpower"], errors="coerce").sum()))}</span></div>',
+            unsafe_allow_html=True,
+        )
+    with metric_columns[1]:
+        st.markdown(
+            f'<div class="bottom-action-metric">Visible Sections: <span>{wtt_dataframe["Section"].nunique():,.0f}</span></div>',
+            unsafe_allow_html=True,
+        )
+
+    formula_registry = pd.DataFrame(workbook_state.get("formula_registry", []))
+    if not formula_registry.empty:
+        with st.expander("Formula tags"):
+            st.dataframe(formula_registry[[FORMULA_TAG_COLUMN, "Target Section", "Target Designation"]], use_container_width=True, hide_index=True)

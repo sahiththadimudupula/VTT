@@ -14,7 +14,7 @@ from wtt_app.config import (
     TAB_WEAVING,
 )
 from wtt_app.core.workbook import initialize_workbook_state
-from wtt_app.ui.components import render_hero, render_sidebar
+from wtt_app.ui.components import render_bottom_action_panel, render_hero
 from wtt_app.ui.styles import inject_professional_styles
 from wtt_app.ui.tabs import (
     render_cut_sew_tab,
@@ -28,7 +28,7 @@ st.set_page_config(
     page_title=APP_TITLE,
     page_icon=APP_ICON,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 
@@ -40,7 +40,6 @@ def main() -> None:
         st.stop()
 
     initialize_workbook_state()
-    render_sidebar()
     render_hero()
 
     tabs = st.tabs([TAB_SIZE_WISE, TAB_WEAVING, TAB_PROCESSING, TAB_CUT_SEW, TAB_VTT])
@@ -55,6 +54,8 @@ def main() -> None:
         render_cut_sew_tab()
     with tabs[4]:
         render_vtt_tab()
+
+    render_bottom_action_panel()
 
 
 if __name__ == "__main__":

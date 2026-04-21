@@ -16,12 +16,12 @@ def inject_professional_styles() -> None:
                 --primary-3: #38bdf8;
                 --bg-1: #f4f8ff;
                 --bg-2: #edf4ff;
-                --surface: rgba(255,255,255,0.82);
-                --surface-strong: rgba(255,255,255,0.94);
+                --surface: rgba(255,255,255,0.84);
+                --surface-strong: rgba(255,255,255,0.97);
                 --text-1: #0f172a;
                 --text-2: #334155;
                 --text-3: #64748b;
-                --border: rgba(148,163,184,0.18);
+                --border: rgba(148,163,184,0.16);
                 --shadow-xs: 0 4px 12px rgba(15,23,42,0.04);
                 --shadow-sm: 0 10px 28px rgba(15,23,42,0.07);
                 --shadow-md: 0 18px 42px rgba(15,23,42,0.10);
@@ -31,7 +31,8 @@ def inject_professional_styles() -> None:
                 font-family: "Inter", "Segoe UI", sans-serif;
             }
 
-            header, [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer, [data-testid="stDecoration"], [data-testid="stStatusWidget"] {
+            header, [data-testid="stHeader"], [data-testid="stToolbar"], #MainMenu, footer,
+            [data-testid="stDecoration"], [data-testid="stStatusWidget"] {
                 display: none !important;
                 height: 0 !important;
                 visibility: hidden !important;
@@ -47,18 +48,17 @@ def inject_professional_styles() -> None:
 
             .block-container, .main .block-container {
                 max-width: 1540px;
-                padding-top: 0.4rem !important;
+                padding-top: 0.2rem !important;
                 padding-bottom: 1rem !important;
                 margin-top: 0 !important;
             }
 
-            .element-container {
-                margin-bottom: 0.25rem !important;
-            }
+            .element-container { margin-bottom: 0.2rem !important; }
+            hr { display: none !important; }
 
             div[data-testid="stTabs"] [role="tablist"] {
                 gap: 0.35rem;
-                background: rgba(255,255,255,0.60);
+                background: rgba(255,255,255,0.68);
                 border: 1px solid rgba(148,163,184,0.16);
                 padding: 0.35rem;
                 border-radius: 16px;
@@ -67,7 +67,7 @@ def inject_professional_styles() -> None:
             }
 
             div[data-testid="stTabs"] button {
-                font-weight: 700;
+                font-weight: 800;
                 font-size: 0.92rem;
                 padding: 0.62rem 0.92rem;
                 color: var(--text-2) !important;
@@ -86,10 +86,6 @@ def inject_professional_styles() -> None:
                 box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
             }
 
-            div[data-testid="stTabs"] button p {
-                color: inherit !important;
-            }
-
             .stButton > button, .stDownloadButton > button {
                 width: 100%;
                 min-height: 46px;
@@ -97,35 +93,56 @@ def inject_professional_styles() -> None:
                 border: 1px solid rgba(255,255,255,0.18);
                 background: linear-gradient(135deg, #1e40af 0%, #2563eb 58%, #38bdf8 100%);
                 color: #ffffff !important;
-                font-weight: 700;
+                font-weight: 800;
                 font-size: 0.93rem;
                 box-shadow: 0 14px 30px rgba(37,99,235,0.20);
+                transition: transform 0.18s ease, box-shadow 0.18s ease;
+            }
+
+            .stButton > button:hover, .stDownloadButton > button:hover {
+                transform: translateY(-1px);
+                box-shadow: 0 18px 36px rgba(37,99,235,0.25);
             }
 
             .hero-shell {
-                background: rgba(255,255,255,0.72);
-                border-radius: 22px;
-                padding: 0.8rem 1rem 0.8rem 1rem;
+                background: rgba(255,255,255,0.76);
+                border-radius: 24px;
+                padding: 0.85rem 1rem;
                 box-shadow: var(--shadow-sm);
                 border: 1px solid rgba(255,255,255,0.46);
                 margin-bottom: 0.65rem;
-                backdrop-filter: blur(16px);
+                backdrop-filter: blur(18px);
             }
 
             .hero-title {
-                font-size: 1.45rem !important;
+                font-size: 1.5rem !important;
                 font-weight: 900;
                 line-height: 1.02;
-                color: var(--text-1) !important;
+                color: var(--primary) !important;
                 margin: 0;
             }
 
+            .section-title {
+                font-size: 1rem;
+                font-weight: 900;
+                color: var(--primary) !important;
+                margin-bottom: 0.08rem;
+            }
+
+            .section-subtitle {
+                color: var(--primary-2) !important;
+                font-size: 0.84rem;
+                margin-bottom: 0.70rem;
+                line-height: 1.5;
+                font-weight: 600;
+            }
+
             .metric-card {
-                background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.76) 100%);
+                background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.82) 100%);
                 border-radius: 20px;
-                padding: 0.88rem 1rem 0.82rem 1rem;
-                box-shadow: var(--shadow-sm);
-                border: 1px solid rgba(255,255,255,0.45);
+                padding: 0.9rem 1rem 0.82rem 1rem;
+                box-shadow: 0 16px 36px rgba(30,64,175,0.08);
+                border: 1px solid rgba(255,255,255,0.52);
                 min-height: 108px;
                 position: relative;
                 overflow: hidden;
@@ -143,7 +160,7 @@ def inject_professional_styles() -> None:
             }
 
             .metric-label {
-                color: var(--text-3);
+                color: var(--primary-2);
                 font-size: 0.78rem;
                 font-weight: 800;
                 margin-bottom: 0.34rem;
@@ -166,50 +183,99 @@ def inject_professional_styles() -> None:
             }
 
             .panel-card {
-                background: transparent !important;
-                border: none !important;
-                box-shadow: none !important;
-                padding: 0 !important;
-                margin: 0 !important;
+                background: transparent;
+                border: none;
+                box-shadow: none;
+                padding: 0;
+                margin: 0;
             }
 
-            .section-title {
-                font-size: 1rem;
-                font-weight: 900;
-                color: var(--text-1);
-                margin-bottom: 0.08rem;
-            }
-
-            .section-subtitle {
-                color: var(--text-3);
-                font-size: 0.84rem;
-                margin-bottom: 0.75rem;
-                line-height: 1.5;
-            }
-
-            div[data-testid="stDataEditor"], div[data-testid="stDataFrame"] {
+            div[data-testid="stDataFrame"], div[data-testid="stDataEditor"] {
                 border-radius: 18px;
                 overflow: hidden;
                 border: 1px solid rgba(148,163,184,0.18);
-                background: rgba(255,255,255,0.82);
-                backdrop-filter: blur(14px);
+                background: #ffffff !important;
                 box-shadow: var(--shadow-sm);
             }
 
-            [data-testid="stSidebar"] {
-                background: linear-gradient(180deg, rgba(255,255,255,0.84) 0%, rgba(255,255,255,0.72) 100%);
-                border-right: 1px solid rgba(148,163,184,0.14);
+            div[data-testid="stDataFrame"] * {
+                color: #0f172a !important;
             }
 
-            .sidebar-heading {
+            div[data-testid="stDataEditor"] * {
+                color: #000000 !important;
+            }
+
+            div[data-testid="stDataEditor"] input, div[data-testid="stDataEditor"] textarea {
+                color: #000000 !important;
+                background: #ffffff !important;
+            }
+
+
+            .filter-shell {
+                background: rgba(255,255,255,0.82);
+                border-radius: 16px;
+                padding: 0.7rem 0.8rem;
+                border: 1px solid rgba(148,163,184,0.14);
+                box-shadow: var(--shadow-xs);
+                margin-bottom: 0.65rem;
+            }
+
+            .bottom-action-shell {
+                background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.84) 100%);
+                border: 1px solid rgba(148,163,184,0.16);
+                border-radius: 18px;
+                padding: 0.85rem 1rem;
+                box-shadow: var(--shadow-sm);
+                margin-bottom: 0.70rem;
+            }
+
+            .bottom-action-status {
+                color: var(--primary) !important;
+                font-size: 0.90rem;
+                font-weight: 800;
+            }
+
+            .bottom-action-status span {
+                color: var(--text-1) !important;
+                font-weight: 700;
+            }
+
+            .bottom-action-metric {
+                background: #ffffff;
+                border: 1px solid rgba(148,163,184,0.16);
+                border-radius: 14px;
+                padding: 0.70rem 0.85rem;
+                box-shadow: var(--shadow-xs);
+                color: var(--primary) !important;
                 font-size: 0.88rem;
                 font-weight: 800;
-                color: var(--text-1);
-                margin-bottom: 0.2rem;
+                margin-top: 0.40rem;
             }
 
-            .divider-space {
-                margin-top: 0.6rem;
+            .bottom-action-metric span {
+                color: var(--text-1) !important;
+                font-weight: 800;
+            }
+
+            div[data-testid="stExpander"] details {
+                border-radius: 18px;
+                border: 1px solid rgba(37,99,235,0.16);
+                background: linear-gradient(135deg, #1e40af 0%, #2563eb 72%, #38bdf8 100%);
+                overflow: hidden;
+                box-shadow: var(--shadow-sm);
+            }
+
+            div[data-testid="stExpander"] details summary p,
+            div[data-testid="stExpander"] details summary span {
+                color: #ffffff !important;
+                font-weight: 800;
+            }
+
+            div[data-testid="stExpanderDetails"] {
+                background: #ffffff;
+                border-radius: 0 0 18px 18px;
+                padding: 0.85rem 0.45rem 0.35rem 0.45rem;
             }
             </style>
             """
