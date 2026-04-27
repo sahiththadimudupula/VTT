@@ -23,10 +23,10 @@ def format_dataframe_for_display(dataframe: pd.DataFrame) -> pd.DataFrame:
     ]
     if hidden_columns:
         formatted_dataframe = formatted_dataframe.drop(columns=hidden_columns)
-    numeric_columns = formatted_dataframe.select_dtypes(include=["number"]).columns
-    for column_name in numeric_columns:
+
+    for column_name in formatted_dataframe.columns:
         formatted_dataframe[column_name] = formatted_dataframe[column_name].map(format_number)
-    return formatted_dataframe
+    return formatted_dataframe.astype(str)
 
 
 def standardize_sheet_columns(dataframe: pd.DataFrame) -> pd.DataFrame:

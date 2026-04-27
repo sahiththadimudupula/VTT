@@ -35,7 +35,7 @@ from wtt_app.core.tables import (
     build_compact_section_table,
     build_expanded_editable_table,
 )
-from wtt_app.core.workbook import build_export_bytes, get_workbook_state, reload_workbook_state, reset_workbook_state
+from wtt_app.core.workbook import build_export_bytes, freeze_workbook_state, get_workbook_state, has_unsaved_changes, reset_workbook_state
 
 
 def render_hero() -> None:
@@ -97,7 +97,7 @@ def render_read_only_table(
     dataframe_with_total = add_total_row(dataframe, label_column=label_column)
     st.dataframe(
         format_dataframe_for_display(dataframe_with_total),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height=height,
     )
@@ -134,7 +134,7 @@ def render_expandable_editable_section(
     with st.expander(f"Expand Section - {section_name}"):
         edited_dataframe = st.data_editor(
             expanded_dataframe.reset_index(drop=True),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             num_rows="fixed",
             key=f"{key_prefix}_editor",
@@ -190,7 +190,7 @@ def render_validation_warning(dataframe: pd.DataFrame, section_name: str) -> Non
     )
     st.dataframe(
         format_dataframe_for_display(add_total_row(mismatch_dataframe, label_column="Designation")),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         height=min(260, 80 + len(mismatch_dataframe) * 36),
     )
@@ -202,24 +202,27 @@ def render_bottom_action_panel() -> None:
     wtt_dataframe = sheets[WTT_SHEET]
 
     render_section_header(
-        'Workbook controls',
-        'Reload the current workbook, reset to the original input file, or download the latest updated workbook.',
+        "Workbook controls",
+        "Freeze current planning edits to the working workbook, reset to the latest PPC source, or download the current workbook.",
     )
-    source_path = str(workbook_state.get('source_path', SOURCE_WORKBOOK_PATH))
+    is_working_source = str(workbook_state.get("source_path", SOURCE_WORKBOOK_PATH)) == str(SOURCE_WORKBOOK_PATH) and False
+    current_source_label = "Working File" if "output" in str(workbook_state.get("source_path", "")).lower() else "Original Input"
+    unsaved_changes_label = "Yes" if has_unsaved_changes() else "No"
     st.markdown(
-        f'<div class="bottom-action-shell"><div class="bottom-action-status">Current Source: <span>{escape(source_path)}</span></div></div>',
+        f'<div class="bottom-action-shell"><div class="bottom-action-status">Current Source: <span>{escape(current_source_label)}</span> &nbsp;|&nbsp; Unsaved Changes: <span>{escape(unsaved_changes_label)}</span></div></div>',
         unsafe_allow_html=True,
     )
 
     action_column_1, action_column_2, action_column_3 = st.columns([1, 1, 1.35])
     with action_column_1:
-        if st.button("Reload workbook", key="reload_workbook_bottom"):
-            reload_workbook_state()
+        if st.button("Freeze Changes", key="freeze_workbook_bottom"):
+            freeze_workbook_state()
+            st.success("All current changes have been frozen to the working workbook.")
             st.rerun()
     with action_column_2:
         if st.button("Reset to original", key="reset_workbook_bottom"):
             reset_workbook_state()
-            st.success("Workbook reset to the original input file.")
+            st.success("Workbook reset to the latest original input file.")
             st.rerun()
 
     export_sheet_map = {
@@ -258,4 +261,4 @@ def render_bottom_action_panel() -> None:
     formula_registry = pd.DataFrame(workbook_state.get("formula_registry", []))
     if not formula_registry.empty:
         with st.expander("Formula tags"):
-            st.dataframe(formula_registry[[FORMULA_TAG_COLUMN, "Target Section", "Target Designation"]], use_container_width=True, hide_index=True)
+            st.dataframe(formula_registry[[FORMULA_TAG_COLUMN, "Target Section", "Target Designation"]], width='stretch', hide_index=True)

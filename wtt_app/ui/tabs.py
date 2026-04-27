@@ -37,6 +37,7 @@ from wtt_app.core.tables import (
 from wtt_app.core.workbook import (
     build_export_bytes,
     get_workbook_state,
+    mark_unsaved_changes,
     replace_size_wise_details_sheet,
     set_workbook_state,
     update_wtt_section,
@@ -90,9 +91,9 @@ def _render_section_collection(
         )
         action_column, _ = st.columns([1, 6])
         with action_column:
-            if st.button(f"Save {section_name}", key=f"save_{tab_key_prefix}_{section_name}"):
-                update_wtt_section(section_name, edited_dataframe)
-                st.success(f"{section_name} saved.")
+            if st.button(f"Apply {section_name}", key=f"save_{tab_key_prefix}_{section_name}"):
+                update_wtt_section(section_name, edited_dataframe, persist=False)
+                st.success(f"{section_name} updated in the live workbook state. Freeze Changes to keep it after refresh.")
                 st.rerun()
         render_validation_warning(remove_total_row(edited_dataframe), section_name)
 
@@ -133,7 +134,7 @@ def render_size_wise_tab() -> None:
     )
     edited_override_dataframe = st.data_editor(
         build_summary_override_editor(summary_dataframe),
-        use_container_width=True,
+        width='stretch',
         hide_index=True,
         num_rows="fixed",
         key="summary_override_editor",
@@ -145,14 +146,16 @@ def render_size_wise_tab() -> None:
     with action_column_1:
         if st.button("Apply summary changes"):
             workbook_state["summary_manual_override"] = edited_override_dataframe.copy()
-            set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
-            st.success("Summary values updated. Linked Cut&Sew calculations have been refreshed.")
+            mark_unsaved_changes()
+            set_workbook_state(refresh_calculated_workbook(workbook_state), persist=False)
+            st.success("Summary values updated in the live workbook state. Freeze Changes to keep them after refresh.")
             st.rerun()
     with action_column_2:
         if st.button("Reset summary to production data"):
             workbook_state["summary_manual_override"] = None
-            set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
-            st.success("Summary reset to the live Size_wise_details production data.")
+            mark_unsaved_changes()
+            set_workbook_state(refresh_calculated_workbook(workbook_state), persist=False)
+            st.success("Summary reset to the live Size_wise_details production data in the app state.")
             st.rerun()
 
     render_read_only_table(
@@ -176,7 +179,7 @@ def render_size_wise_tab() -> None:
     if replacement_file is not None and st.button("Replace Size_wise_details now"):
         is_success, message = replace_size_wise_details_sheet(replacement_file.getvalue())
         if is_success:
-            st.success("Size_wise_details replaced. Summary and Cut&Sew helper tables refreshed.")
+            st.success("Size_wise_details replaced in input/WTT.xlsx. Summary and Cut&Sew helper tables refreshed from the new PPC source.")
             st.rerun()
         else:
             st.error(f"Missing required columns: {message}")
@@ -283,8 +286,9 @@ def render_processing_tab() -> None:
             "capacity_per_machine_per_shift_mt": capacity_per_machine,
             "available_machines": available_machines,
         }
-        set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
-        st.success("Stenter planning refreshed.")
+        mark_unsaved_changes()
+        set_workbook_state(refresh_calculated_workbook(workbook_state), persist=False)
+        st.success("Stenter planning refreshed in the live workbook state. Freeze Changes to keep it after refresh.")
         st.rerun()
 
     render_read_only_table(

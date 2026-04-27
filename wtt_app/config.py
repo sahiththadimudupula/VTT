@@ -66,6 +66,7 @@ WTT_COMPACT_DISPLAY_COLUMNS = [
     "Section",
     "Dept_Machine_Name",
     "Designation",
+    "Machine_Count",
     "BE_Final_Manpower",
 ]
 WTT_EXPANDED_DISPLAY_COLUMNS = [
@@ -163,6 +164,7 @@ STENTER_DESIGNATION_RULES = {
 }
 
 SESSION_KEY_WORKBOOK = "workbook_data"
+SESSION_KEY_UNSAVED_CHANGES = "unsaved_changes"
 STREAMLIT_NUMBER_FORMAT = "%.2f"
 
 LC_CATEGORY_SETTINGS = {

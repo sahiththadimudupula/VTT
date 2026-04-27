@@ -10,11 +10,14 @@ import streamlit as st
 from wtt_app.calculations.formula_registry import build_formula_registry
 from wtt_app.calculations.helpers import parse_stenter_inputs
 from wtt_app.calculations.links import refresh_calculated_workbook
+from wtt_app.calculations.summary import build_summary_manual_override_from_sheet
 from wtt_app.config import (
     OUTPUT_DIRECTORY_PATH,
+    SESSION_KEY_UNSAVED_CHANGES,
     SESSION_KEY_WORKBOOK,
     SIZE_WISE_DETAILS_SHEET,
     SIZE_WISE_REQUIRED_COLUMNS,
+    SIZE_WISE_SUMMARY_SHEET,
     SOURCE_WORKBOOK_PATH,
     WORKING_WORKBOOK_PATH,
     WTT_INTERNAL_ROW_ID_COLUMN,
@@ -54,8 +57,36 @@ def build_exportable_sheet_map(sheet_map: dict[str, pd.DataFrame]) -> dict[str, 
     return export_sheet_map
 
 
+
+
+def build_stenter_input_sheet(stenter_inputs: dict[str, Any]) -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            ["Required Production / Day (MT)", float(stenter_inputs["required_production_mt_per_day"])],
+            ["Capacity / Machine / Shift (MT)", float(stenter_inputs["capacity_per_machine_per_shift_mt"])],
+            ["Available Machines", float(stenter_inputs["available_machines"])],
+        ]
+    )
+
+
+def overwrite_sheet_in_workbook(workbook_path: Path, sheet_name: str, dataframe: pd.DataFrame) -> None:
+    workbook_sheets = load_workbook_sheets(str(workbook_path))
+    workbook_sheets[sheet_name] = standardize_sheet_columns(dataframe.copy())
+    with pd.ExcelWriter(workbook_path, engine="openpyxl") as excel_writer:
+        for current_sheet_name, current_dataframe in workbook_sheets.items():
+            export_dataframe = current_dataframe.copy()
+            hidden_columns = [
+                column_name
+                for column_name in [WTT_INTERNAL_ROW_ID_COLUMN]
+                if column_name in export_dataframe.columns
+            ]
+            if hidden_columns:
+                export_dataframe = export_dataframe.drop(columns=hidden_columns)
+            export_dataframe.to_excel(excel_writer, sheet_name=current_sheet_name[:31], index=False)
+
 def persist_workbook_state(workbook_state: dict[str, Any]) -> None:
     OUTPUT_DIRECTORY_PATH.mkdir(parents=True, exist_ok=True)
+    workbook_state["sheets"]["Stenter"] = build_stenter_input_sheet(workbook_state["stenter_inputs"])
     export_sheet_map = build_exportable_sheet_map(workbook_state["sheets"])
     with pd.ExcelWriter(WORKING_WORKBOOK_PATH, engine="openpyxl") as excel_writer:
         for sheet_name, dataframe in export_sheet_map.items():
@@ -73,36 +104,50 @@ def initialize_workbook_state() -> None:
         source_workbook[WTT_SHEET] = source_workbook[WTT_SHEET].reset_index(drop=True)
         source_workbook[WTT_SHEET][WTT_INTERNAL_ROW_ID_COLUMN] = source_workbook[WTT_SHEET].index.astype(int)
     stenter_inputs = parse_stenter_inputs(source_workbook.get("Stenter", pd.DataFrame()))
+    summary_manual_override = None
+    if active_workbook_path == WORKING_WORKBOOK_PATH and SIZE_WISE_SUMMARY_SHEET in source_workbook:
+        summary_manual_override = build_summary_manual_override_from_sheet(source_workbook[SIZE_WISE_SUMMARY_SHEET])
     workbook_state: dict[str, Any] = {
         "source_path": str(active_workbook_path),
         "sheets": source_workbook,
-        "summary_manual_override": None,
+        "summary_manual_override": summary_manual_override,
         "stenter_inputs": stenter_inputs,
         "formula_registry": build_formula_registry(),
     }
     st.session_state[SESSION_KEY_WORKBOOK] = refresh_calculated_workbook(workbook_state)
+    st.session_state[SESSION_KEY_UNSAVED_CHANGES] = False
 
 
 def get_workbook_state() -> dict[str, Any]:
     return st.session_state[SESSION_KEY_WORKBOOK]
 
 
+def mark_unsaved_changes() -> None:
+    st.session_state[SESSION_KEY_UNSAVED_CHANGES] = True
+
+
+def has_unsaved_changes() -> bool:
+    return bool(st.session_state.get(SESSION_KEY_UNSAVED_CHANGES, False))
+
+
 def set_workbook_state(workbook_state: dict[str, Any], persist: bool = False) -> None:
     if persist:
         persist_workbook_state(workbook_state)
+        st.session_state[SESSION_KEY_UNSAVED_CHANGES] = False
     st.session_state[SESSION_KEY_WORKBOOK] = workbook_state
-
-
-def reload_workbook_state() -> None:
-    st.session_state.pop(SESSION_KEY_WORKBOOK, None)
-    initialize_workbook_state()
 
 
 def reset_workbook_state() -> None:
     if WORKING_WORKBOOK_PATH.exists():
         WORKING_WORKBOOK_PATH.unlink()
     st.session_state.pop(SESSION_KEY_WORKBOOK, None)
+    st.session_state.pop(SESSION_KEY_UNSAVED_CHANGES, None)
     initialize_workbook_state()
+
+
+def freeze_workbook_state() -> None:
+    workbook_state = get_workbook_state()
+    set_workbook_state(workbook_state, persist=True)
 
 
 def validate_size_wise_details_columns(size_wise_dataframe: pd.DataFrame) -> list[str]:
@@ -114,7 +159,6 @@ def validate_size_wise_details_columns(size_wise_dataframe: pd.DataFrame) -> lis
 
 
 def replace_size_wise_details_sheet(uploaded_bytes: bytes) -> tuple[bool, str]:
-    workbook_state = get_workbook_state()
     uploaded_excel = pd.ExcelFile(BytesIO(uploaded_bytes))
     candidate_sheet_name = (
         SIZE_WISE_DETAILS_SHEET
@@ -126,9 +170,13 @@ def replace_size_wise_details_sheet(uploaded_bytes: bytes) -> tuple[bool, str]:
     if missing_columns:
         return False, ", ".join(missing_columns)
 
-    workbook_state["sheets"][SIZE_WISE_DETAILS_SHEET] = standardize_sheet_columns(candidate_dataframe)
-    workbook_state["summary_manual_override"] = None
-    set_workbook_state(refresh_calculated_workbook(workbook_state), persist=True)
+    normalized_dataframe = standardize_sheet_columns(candidate_dataframe)
+    overwrite_sheet_in_workbook(SOURCE_WORKBOOK_PATH, SIZE_WISE_DETAILS_SHEET, normalized_dataframe)
+    if WORKING_WORKBOOK_PATH.exists():
+        WORKING_WORKBOOK_PATH.unlink()
+    st.session_state.pop(SESSION_KEY_WORKBOOK, None)
+    st.session_state.pop(SESSION_KEY_UNSAVED_CHANGES, None)
+    initialize_workbook_state()
     return True, ""
 
 
@@ -166,6 +214,8 @@ def update_wtt_section(section_name: str, edited_section_dataframe: pd.DataFrame
 
     workbook_state["sheets"][WTT_SHEET] = original_wtt_dataframe.reset_index(drop=True)
     workbook_state = refresh_calculated_workbook(workbook_state)
+    if not persist:
+        st.session_state[SESSION_KEY_UNSAVED_CHANGES] = True
     set_workbook_state(workbook_state, persist=persist)
 
 

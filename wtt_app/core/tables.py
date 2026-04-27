@@ -72,8 +72,8 @@ def build_compact_section_table(dataframe: pd.DataFrame, display_columns: list[s
 
 
 def build_expanded_editable_table(dataframe: pd.DataFrame, display_columns: list[str]) -> pd.DataFrame:
-    available_columns = [column_name for column_name in display_columns if column_name in dataframe.columns]
-    if WTT_INTERNAL_ROW_ID_COLUMN in dataframe.columns and WTT_INTERNAL_ROW_ID_COLUMN not in available_columns:
-        available_columns = [WTT_INTERNAL_ROW_ID_COLUMN, *available_columns]
-    expanded_dataframe = dataframe[available_columns].copy()
+    expanded_dataframe = dataframe.copy()
+    if WTT_INTERNAL_ROW_ID_COLUMN in expanded_dataframe.columns:
+        ordered_columns = [column_name for column_name in expanded_dataframe.columns if column_name != WTT_INTERNAL_ROW_ID_COLUMN]
+        expanded_dataframe = expanded_dataframe[[WTT_INTERNAL_ROW_ID_COLUMN, *ordered_columns]]
     return add_total_row(expanded_dataframe, label_column="Section" if "Section" in expanded_dataframe.columns else None)

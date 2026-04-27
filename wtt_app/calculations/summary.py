@@ -65,6 +65,34 @@ def apply_manual_summary_override(
     return merged_dataframe.reset_index()
 
 
+
+
+def build_summary_manual_override_from_sheet(summary_sheet_dataframe: pd.DataFrame) -> pd.DataFrame | None:
+    if summary_sheet_dataframe is None or summary_sheet_dataframe.empty:
+        return None
+
+    normalized_dataframe = summary_sheet_dataframe.copy()
+    if "Row Labels" not in normalized_dataframe.columns:
+        return None
+
+    detail_rows = normalized_dataframe[normalized_dataframe["Row Labels"].isin(SIZE_CATEGORY_ORDER)].copy()
+    if detail_rows.empty:
+        return None
+
+    available_columns = [
+        column_name
+        for column_name in ["Row Labels", *SUMMARY_EDITABLE_COLUMNS]
+        if column_name in detail_rows.columns
+    ]
+    if len(available_columns) <= 1:
+        return None
+
+    detail_rows = detail_rows[available_columns].copy()
+    for column_name in SUMMARY_EDITABLE_COLUMNS:
+        if column_name in detail_rows.columns:
+            detail_rows[column_name] = pd.to_numeric(detail_rows[column_name], errors="coerce")
+    return detail_rows.reset_index(drop=True)
+
 def add_derived_summary_rows(summary_detail_rows: pd.DataFrame) -> pd.DataFrame:
     summary_dataframe = summary_detail_rows.copy()
     total_order_pcs = float(summary_dataframe["Sum of Order Pcs"].sum())
