@@ -43,7 +43,7 @@ def render_hero() -> None:
         dedent(
             """
             <div class="hero-shell">
-                <div class="hero-title">Welspun Vapi Terry Tovals Engine</div>
+                <div class="hero-title">Welspun Vapi Terry Towel Engine</div>
             </div>
             """
         ),
